@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from sklearn.model_selection import train_test_split
+from scipy.stats import boxcox
 
 
 def separate_data(input_file: str, output_file: str) -> list:
@@ -122,6 +123,36 @@ def round_data_values(input_file: str, output_file: str) -> None:
     df.to_excel(output_file, index=False)
 
 
+def transform_data(input_file: str, output_file: str) -> None:
+    """
+    Applies a Box-Cox transformation and a natural logarithm transformation
+    to the 'Number of cycles (times)' column in an Excel file.
+    Adds the transformed values as new columns and saves the updated dataset.
+
+    Args:
+    - input_file (str): Path to the input Excel file.
+    - output_file (str): Path where the transformed data will be saved.
+
+    Returns:
+    - None
+    """
+    # Load data from Excel file
+    df = pd.read_excel(input_file)
+
+    # Apply Box-Cox transformation
+    transformed_values, lambda_value = boxcox(df['Number of cycles (times)'])
+
+    # Apply natural logarithm transformation
+    log_transformed_values = np.log(df['Number of cycles (times)'])
+
+    # Add the transformed columns to the DataFrame
+    df['Number of cycles (Box-Cox transformed)'] = transformed_values
+    df['Number of cycles (Log transformed)'] = log_transformed_values
+
+    # Save the updated DataFrame to a new Excel file
+    df.to_excel(output_file, index=False)
+
+
 def filter_outliers_by_quantile(input_file: str, output_file: str, lower_quantile: float = 0.05,
                                 upper_quantile: float = 0.95) -> None:
     """
@@ -161,17 +192,15 @@ def filter_outliers_by_quantile(input_file: str, output_file: str, lower_quantil
     df_filtered.to_excel(output_file, index=False)
 
 
-def filter_outliers_by_zscore(input_file: str, output_file: str, threshold: float = 3.0) -> None:
+def filter_outliers_by_zscore(filtrated_column, input_file: str, output_file: str, threshold: float = 3.0) -> None:
     """
-    Removes rows from an Excel dataset based on Z-scores.
+    Removes rows from an Excel dataset based on Z-scores calculated only for specified columns.
 
-    The function operates as follows:
-    1. Loads the dataset from the specified Excel file into a pandas DataFrame.
-    2. Calculates the Z-scores for all numeric columns in the DataFrame. The Z-score represents how many standard deviations away a value is from the mean of its column.
-    3. Filters out any rows where the absolute value of the Z-score in any numeric column exceeds a specified threshold. The default threshold is set at 3.0, typically used to identify outliers in a dataset.
-    4. Saves the DataFrame, now excluding the identified outliers, to a new Excel file specified by the output_file parameter, without including row indices.
+    The function calculates Z-scores for the specified columns ("Box cox" and "LN") and filters out rows
+    where the Z-score exceeds the specified threshold.
 
     Args:
+    - filtrated_column: Box-cox transformed, or logarithmic transformed
     - input_file (str): Path to the input Excel file.
     - output_file (str): Path where the filtered data will be saved.
     - threshold (float, optional): Z-score threshold to identify outliers. Default is 3.0.
@@ -179,15 +208,15 @@ def filter_outliers_by_zscore(input_file: str, output_file: str, threshold: floa
     Returns:
     - None
     """
-
     # Load data
     df = pd.read_excel(input_file)
 
-    # Calculate Z-scores for numeric columns
-    numeric_cols = df.select_dtypes(include=[np.number])
-    z_scores = stats.zscore(numeric_cols)
+    required_columns = [filtrated_column]
 
-    # Handle NaN values
+    # Calculate Z-scores only for the specified columns
+    z_scores = stats.zscore(df[required_columns])
+
+    # Handle NaN values in Z-scores
     z_scores = np.nan_to_num(z_scores)
 
     # Filter rows based on Z-score threshold
